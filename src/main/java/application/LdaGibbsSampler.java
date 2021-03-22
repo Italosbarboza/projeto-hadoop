@@ -113,15 +113,12 @@ public class LdaGibbsSampler {
     public void initialState(int K) {
         int M = documents.length;
 
-        // initialise count variables.
         nw = new int[V][K];
         nd = new int[M][K];
         nwsum = new int[K];
         ndsum = new int[M];
 
-        // The z_i are are initialised to values in [1,K] to determine the
-        // initial state of the Markov chain.
-
+      
         z = new int[M][];
         for (int m = 0; m < M; m++) {
             int N = documents[m].length;
@@ -129,14 +126,10 @@ public class LdaGibbsSampler {
             for (int n = 0; n < N; n++) {
                 int topic = (int) (Math.random() * K);
                 z[m][n] = topic;
-                // number of instances of word i assigned to topic j
                 nw[documents[m][n]][topic]++;
-                // number of words in document i assigned to topic j.
                 nd[m][topic]++;
-                // total number of words assigned to topic j.
                 nwsum[topic]++;
             }
-            // total number of words in document i
             ndsum[m] = N;
         }
     }
@@ -159,42 +152,32 @@ public class LdaGibbsSampler {
         this.alpha = alpha;
         this.beta = beta;
 
-        // init sampler statistics
         if (SAMPLE_LAG > 0) {
             thetasum = new double[documents.length][K];
             phisum = new double[K][V];
             numstats = 0;
         }
 
-        // initial state of the Markov chain:
         initialState(K);
 
         System.out.println("Sampling " + ITERATIONS + " iterations with burn-in of " + BURN_IN + " (B/S=" + THIN_INTERVAL + ").");
 
         for (int i = 0; i < ITERATIONS; i++) {
-            // for all z_i
             for (int m = 0; m < z.length; m++) {
                 for (int n = 0; n < z[m].length; n++) {
-                    // (z_i = z[m][n])
-                    // sample from p(z_i|z_-i, w)
                     int topic = sampleFullConditional(m, n);
                     z[m][n] = topic;
                 }
             }
 
             if ((i < BURN_IN) && (i % THIN_INTERVAL == 0)) {
-                //System.out.print("B");
                 dispcol++;
             }
-            // display progress
             if ((i > BURN_IN) && (i % THIN_INTERVAL == 0)) {
-                //System.out.print("S");
                 dispcol++;
             }
-            // get statistics after burn-in
             if ((i > BURN_IN) && (SAMPLE_LAG > 0) && (i % SAMPLE_LAG == 0)) {
                 updateParams();
-                //System.out.print("|");
                 if (i % THIN_INTERVAL != 0) dispcol++;
             }
             if (dispcol >= 100) {
@@ -215,31 +198,26 @@ public class LdaGibbsSampler {
      */
     private int sampleFullConditional(int m, int n) {
 
-        // remove z_i from the count variables
         int topic = z[m][n];
         nw[documents[m][n]][topic]--;
         nd[m][topic]--;
         nwsum[topic]--;
         ndsum[m]--;
 
-        // do multinomial sampling via cumulative method:
         double[] p = new double[K];
         for (int k = 0; k < K; k++) {
             p[k] = (nw[documents[m][n]][k] + beta) / (nwsum[k] + V * beta)
                     * (nd[m][k] + alpha) / (ndsum[m] + K * alpha);
         }
-        // cumulate multinomial parameters
         for (int k = 1; k < p.length; k++) {
             p[k] += p[k - 1];
         }
-        // scaled sample because of unnormalised p[]
         double u = Math.random() * p[K - 1];
         for (topic = 0; topic < p.length; topic++) {
             if (u < p[topic])
                 break;
         }
 
-        // add newly estimated z_i to count variables
         nw[documents[m][n]][topic]++;
         nd[m][topic]++;
         nwsum[topic]++;
@@ -326,7 +304,6 @@ public class LdaGibbsSampler {
     public static void hist(double[] data, int fmax) {
 
         double[] hist = new double[data.length];
-        // scale maximum
         double hmax = 0;
         for (int i = 0; i < data.length; i++) {
             hmax = Math.max(data[i], hmax);
@@ -380,54 +357,40 @@ public class LdaGibbsSampler {
     public static double[] inference(double alpha, double beta, double[][] phi, int[] doc) {
         int K = phi.length;
         int V = phi[0].length;
-        // init
 
-        // initialise count variables.
         int[][] nw = new int[V][K];
         int[] nd = new int[K];
         int[] nwsum = new int[K];
         int ndsum = 0;
 
-        // The z_i are are initialised to values in [1,K] to determine the
-        // initial state of the Markov chain.
-
+       
         int N = doc.length;
         int[] z = new int[N];
         for (int n = 0; n < N; n++) {
             int topic = (int) (Math.random() * K);
             z[n] = topic;
-            // number of instances of word i assigned to topic j
             nw[doc[n]][topic]++;
-            // number of words in document i assigned to topic j.
             nd[topic]++;
-            // total number of words assigned to topic j.
             nwsum[topic]++;
         }
-        // total number of words in document i
         ndsum = N;
         for (int i = 0; i < ITERATIONS; i++) {
             for (int n = 0; n < z.length; n++) {
 
-                // (z_i = z[m][n])
-                // sample from p(z_i|z_-i, w)
-                // remove z_i from the count variables 
                 int topic = z[n];
                 nw[doc[n]][topic]--;
                 nd[topic]--;
                 nwsum[topic]--;
                 ndsum--;
 
-                // do multinomial sampling via cumulative method
                 double[] p = new double[K];
                 for (int k = 0; k < K; k++) {
                     p[k] = phi[k][doc[n]]
                             * (nd[k] + alpha) / (ndsum + K * alpha);
                 }
-                // cumulate multinomial parameters
                 for (int k = 1; k < p.length; k++) {
                     p[k] += p[k - 1];
                 }
-                // scaled sample because of unnormalise
                 double u = Math.random() * p[K - 1];
                 for (topic = 0; topic < p.length; topic++) {
                     if (u < p[topic])
@@ -436,7 +399,6 @@ public class LdaGibbsSampler {
                 if (topic == K) {
                     throw new RuntimeException("the param K or topic is set too small");
                 }
-                // add newly estimated z_i to count variables 
                 nw[doc[n]][topic]++;
                 nd[topic]++;
                 nwsum[topic]++;
